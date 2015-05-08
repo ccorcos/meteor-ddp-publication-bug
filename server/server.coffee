@@ -5,20 +5,27 @@ Meteor.startup ->
     for name in names
       Players.insert({name})
 
-observeCursor = (sub, key, x) ->
-  cursor = Players.find({name:{$in:x}})
+class CursorObserver
+  constructor: (@sub, @key, @getCursor) ->
+    @ids = []
 
-  handle = cursor.observeChanges 
-    added: (id, fields) ->
-      fields[key] = true
-      sub.added('players', id, fields)
-    changed: (id, fields) ->
-      sub.changes('players', id, fields)
-    removed: (id) ->
-      sub.removed('players', id)
-  
-  sub.onStop ->
-    handle.stop()
+  query: (newIds) ->
+    stale = R.difference(ids, newIds)
+
+
+    cursor = @getCursor(newIds)
+
+    handle = cursor.observeChanges 
+      added: (id, fields) ->
+        fields[key] = true
+        sub.added('players', id, fields)
+      changed: (id, fields) ->
+        sub.changed('players', id, fields)
+      removed: (id) ->
+        sub.removed('players', id)
+    
+    sub.onStop ->
+      handle.stop()
 
   return handle
 
