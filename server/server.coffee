@@ -6,40 +6,51 @@ Meteor.startup ->
       Players.insert({name})
 
 class CursorObserver
-  constructor: (@sub, @key, @getCursor) ->
+  constructor: (@sub, @collection, @key, @getCursor) ->
     @ids = []
+    @handle = null
+    @sub.onStop =>
+      @handle?.stop?()
 
-  query: (newIds) ->
-    stale = R.difference(ids, newIds)
+  observe: (newIds) ->
+    # remove the stale docs
+    removeIds = R.difference(@ids, newIds)
+    for id in removeIds
+      @sub.removed(@collection, id)
 
-
+    # don't add the same doc twice!
+    addIds = R.difference(newIds, @ids)
     cursor = @getCursor(newIds)
 
-    handle = cursor.observeChanges 
-      added: (id, fields) ->
-        fields[key] = true
-        sub.added('players', id, fields)
-      changed: (id, fields) ->
-        sub.changed('players', id, fields)
-      removed: (id) ->
-        sub.removed('players', id)
+    @handle?.stop?()
+    @handle = cursor.observeChanges 
+      added: (id, fields) =>
+        if R.contains(id, addIds)
+          fields[@key] = true
+          @sub.added(@collection, id, fields)
+      changed: (id, fields) =>
+        @sub.changed(@collection, id, fields)
+      removed: (id) =>
+        @sub.removed(@collection, id)
     
-    sub.onStop ->
-      handle.stop()
+    @ids = newIds
 
-  return handle
+getPlayersCursor = (x) ->
+  Players.find({_id:{$in:x}})
+
+names2Ids = (x) ->
+  _.pluck(Players.find({name:{$in:x}}, {fields:{_id:1}}).fetch(), '_id')
 
 Meteor.publish 'feed1', ->
-  sub = this
-  handle = observeCursor sub, 'feed1', ["chet", "joe", "charlie"]
-  sub.ready()
+  observer = new CursorObserver(this, 'players', 'feed1', getPlayersCursor)
+  observer.observe names2Ids(["chet", "joe", "charlie"])
+  @ready()
   return
 
 Meteor.publish 'feed2', ->
-  sub = this
-  handle = observeCursor sub, 'feed2', ["chet", "joe"]
-  sub.ready()
+  observer = new CursorObserver(this, 'players', 'feed2', getPlayersCursor)
+  observer.observe names2Ids(["chet", "joe"])
+  @ready()
   delay 1000, ->
-    handle.stop()
-    handle = observeCursor sub, 'feed2', ["joe", "charlie"]
+    observer.observe names2Ids(["joe", "charlie"])
   return
