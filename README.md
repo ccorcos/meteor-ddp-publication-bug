@@ -31,3 +31,7 @@ IN   {"msg":"changed","collection":"players","id":"J6xpSXMZLXRJMZzGh","cleared":
 IN   {"msg":"changed","collection":"players","id":"P3SC4Z3vHDJXQTWMT","cleared":["feed2"]}
 IN   {"msg":"nosub","id":"SWncTtwnr5WSQ8X48"}
 ```
+
+## Update
+
+It appears the problem occurs when I call `sub.added` multiple times for the same document within the same subscription. This occurs when there is overlap between the cursors. Thus, I have made sure to meticulously diff the documents so we don't add the same document twice. This can be seen in the `diff` branch. That said, I would still consider this a bug. If merge-box is efficiently sending only the minimal amount of information, it ought to be able to handle when a single document is added more than once.
